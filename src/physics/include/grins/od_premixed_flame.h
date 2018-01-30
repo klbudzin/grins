@@ -30,18 +30,22 @@ namespace GRINS
 
     unsigned int n_species() const;
     libMesh::Real T( const libMesh::Point& p, const AssemblyContext& c ) const;
+
     libMesh::Real M_dot( const libMesh::Point& p, const AssemblyContext& c ) const;
+
     void mass_fractions( const libMesh::Point& p, const AssemblyContext& c,
                          std::vector<libMesh::Real>& mass_fracs ) const;
 
     libMesh::Real rho( libMesh::Real T, libMesh::Real p0, libMesh::Real R_mix) const;
+
     libMesh::Real get_p0() const;
 
     
     //Register postprocessing variables for OD Premixed Flame 
     virtual void register_postprocessing_vars( const GetPot& input,
 					       PostProcessedQuantities<libMesh::Real>& postprocessing);
-        virtual void register_parameter(const std::string & param_name, libMesh::ParameterMultiAccessor<libMesh::Number> & param_pointer ) 
+   
+    virtual void register_parameter(const std::string & param_name, libMesh::ParameterMultiAccessor<libMesh::Number> & param_pointer ) 
       const;
 
     // Context Initializations
@@ -54,6 +58,7 @@ namespace GRINS
     //Mass matrix part(s)            
     virtual void mass_residual( bool compute_jacobian,
 				AssemblyContext & context );
+        
     virtual void element_constraint(bool compute_jacobian,
 				    AssemblyContext & context );
 
@@ -77,10 +82,6 @@ namespace GRINS
     libMesh::Real _fixed_rho_value;
     std::unique_ptr<Mixture> _gas_mixture;
 
-
-
-
-
     //! Index from registering this quantity
     unsigned int _rho_index;               
     //! Index from registering this quantity        
@@ -89,6 +90,7 @@ namespace GRINS
     unsigned int _cp_index;
     //!Index from registering this quantity
     unsigned int _u_index;
+
     //!Index from registering this quantity
     libMesh::Number _p0;
 
@@ -116,6 +118,7 @@ namespace GRINS
 
   }; //Class ODPremixedFlame
   
+
   template< typename Mixture, typename Evaluator>
     inline
     unsigned int ODPremixedFlame<Mixture,Evaluator>::n_species() const
