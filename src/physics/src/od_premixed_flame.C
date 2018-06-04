@@ -334,8 +334,8 @@ namespace GRINS
 	    libMesh::DenseSubVector<libMesh::Number> &Fs =
 	      context.get_elem_residual(this->_species_vars.species(s)); //R_{s}
 	    
-	    const libMesh::Real term1 = -M_dot*Grad_mass_fractions[s](0) + omega_dot[s];
-	    const libMesh::Real term2 = -rho*D[s]*Grad_mass_fractions[s](0);
+	    const libMesh::Real term1 = -u*Grad_mass_fractions[s](0) + omega_dot[s]/rho;
+	    const libMesh::Real term2 = -D[s]*Grad_mass_fractions[s](0);
 	    
 	    for (unsigned int i =0;i != n_s_dofs;i++)
 	      {
@@ -406,7 +406,7 @@ namespace GRINS
 
 	    for (unsigned int i = 0; i != n_s_dofs; ++i)
 	      {
-		F_s(i) -= rho*mass_fractions_dot*s_phi[i][qp]*jac;
+		F_s(i) -= mass_fractions_dot*s_phi[i][qp]*jac;
 	      }
 	  }
 	
@@ -435,20 +435,18 @@ namespace GRINS
       
     const std::vector<libMesh::Real> &JxW =
       context.get_element_fe(this->_temp_vars.T())->get_JxW();
-      
+
     // The Mass Flux shape functions at interior quadrature points.
     const std::vector<std::vector<libMesh::Real> >& u_phi =
       context.get_element_fe(this->_vel_vars.u())->get_phi();
 
     const unsigned int n_u_dofs =
-      context.get_dof_indices(this->_vel_vars.u()).size();
-      
+      context.get_dof_indices(this->_vel_vars.u()).size();  
+
     libMesh::DenseSubVector<libMesh::Number> & Fu =
       context.get_elem_residual(this->_vel_vars.u()); // R_{M}
 
     unsigned int n_qpoints = context.get_element_qrule().n_points();
-
-
  
     for (unsigned int qp = 0; qp != n_qpoints; ++qp)
       {
@@ -469,9 +467,6 @@ namespace GRINS
 	  }
 
 	Evaluator gas_evaluator(*(this-> _gas_mixture));
-	const libMesh::Real R_mix = gas_evaluator.R_mix(mass_fractions);
-        const libMesh::Real p0 = this->get_p0();
-        const libMesh::Real rho = this->rho(T, p0, R_mix);
 	const libMesh::Real M_mix = gas_evaluator.M_mix(mass_fractions);
 	libMesh::Real Chem_Term = 0;
 	libMesh::Real jac = JxW[qp];
@@ -481,7 +476,7 @@ namespace GRINS
 	  }
 	for(unsigned int i = 0; i!= n_u_dofs; i++)
 	  {
-	    Fu(i) +=((rho*dudx(0))-p0*u/(R_mix*T)*(M_mix*Chem_Term + dTdx(0)/T))*u_phi[i][qp]*jac;
+	    Fu(i) +=(dudx(0)-u*(M_mix*Chem_Term+dTdx(0)/T))*u_phi[i][qp]*jac;
 	  }
 
       } // end Quadrature loop
@@ -542,7 +537,6 @@ namespace GRINS
     else if ( quantity_index == this->_M_dot_index )
       {
 	libMesh::Real vel = context.point_value(_vel_vars.u(),point);
-
 	std::vector<libMesh::Real> Y( this->_n_species );
 	libMesh::Real T = this->T(point,context);
 	libMesh::Real p0 = this->get_p0();
