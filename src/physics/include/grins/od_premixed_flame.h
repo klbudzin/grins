@@ -30,7 +30,6 @@ namespace GRINS
 
     unsigned int n_species() const;
     libMesh::Real T( const libMesh::Point& p, const AssemblyContext& c ) const;
-    libMesh::Real M_dot( const libMesh::Point& p, const AssemblyContext& c ) const;
     void mass_fractions( const libMesh::Point& p, const AssemblyContext& c,
                          std::vector<libMesh::Real>& mass_fracs ) const;
 
@@ -68,7 +67,7 @@ namespace GRINS
     //Variables 
     PrimitiveTempFEVariables& _temp_vars;
     SpeciesMassFractionsVariable& _species_vars;
-    SingleVariable& _mass_flux_vars;
+    VelocityVariable& _vel_vars;
 
     //! Number of species
     unsigned int _n_species;
@@ -88,14 +87,11 @@ namespace GRINS
     //!Index from registering this quantity
     unsigned int _cp_index;
     //!Index from registering this quantity
-    unsigned int _u_index;
+    unsigned int _M_dot_index;
     //!Index from registering this quantity
     
     libMesh::Number _p0;
-    libMesh::Point _T_Fixed_Loc;
-    libMesh::Number _T_Fixed;
-    libMesh::Number _Penalty_Tol;
-
+    
     //! Index from registering this quantity. Each species will have it's own index.
     std::vector<unsigned int> _mole_fractions_index;
     
@@ -120,6 +116,8 @@ namespace GRINS
 
   }; //Class ODPremixedFlame
   
+  /****************************************************************************************************************
+   ***************************************************************************************************************/
   template< typename Mixture, typename Evaluator>
     inline
     unsigned int ODPremixedFlame<Mixture,Evaluator>::n_species() const
@@ -130,13 +128,7 @@ namespace GRINS
     libMesh::Real ODPremixedFlame<Mixture,Evaluator>::T( const libMesh::Point& p,
 							 const AssemblyContext& c ) const
     { return c.point_value(_temp_vars.T(),p); }
-  
-  template< typename Mixture, typename Evaluator>
-    inline
-    libMesh::Real ODPremixedFlame<Mixture,Evaluator>::M_dot( const libMesh::Point& p,
-							     const AssemblyContext& c ) const
-    { return c.point_value(_mass_flux_vars.var(),p); }
-  
+
   template< typename Mixture, typename Evaluator>
     inline
     void ODPremixedFlame<Mixture,Evaluator>::mass_fractions( const libMesh::Point& p,

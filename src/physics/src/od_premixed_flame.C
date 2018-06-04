@@ -33,7 +33,7 @@ namespace GRINS
     : Physics(physics_name,input),
       _temp_vars(GRINSPrivate::VariableWarehouse::get_variable_subclass<PrimitiveTempFEVariables>(VariablesParsing::temp_variable_name(input,physics_name,VariablesParsing::PHYSICS))),
       _species_vars(GRINSPrivate::VariableWarehouse::get_variable_subclass<SpeciesMassFractionsVariable>(VariablesParsing::species_mass_frac_variable_name(input,physics_name,VariablesParsing::PHYSICS))),
-      _mass_flux_vars(GRINSPrivate::VariableWarehouse::get_variable_subclass<SingleVariable>(VariablesParsing::single_variable_name(input,physics_name,VariablesParsing::PHYSICS))),
+      _vel_vars(GRINSPrivate::VariableWarehouse::get_variable_subclass<VelocityVariable>(VariablesParsing::velocity_variable_name(input,physics_name,VariablesParsing::PHYSICS))),
       _n_species(_species_vars.n_species()),
       _fixed_density( input("Physics/"+PhysicsNaming::od_premixed_flame()+"/fixed_density", false ) ),
       _fixed_rho_value(0.0),
@@ -41,23 +41,17 @@ namespace GRINS
       _rho_index(0),
       _k_index(0),           
       _cp_index(0),
-      _u_index(0)
+      _M_dot_index(0)
   {
     this->set_parameter                    
       (_fixed_rho_value, input,
        "Physics/"+PhysicsNaming::od_premixed_flame()+"/fixed_rho_value", 0.0 );
 
-    this->_T_Fixed_Loc = input("Physics/"+PhysicsNaming::od_premixed_flame()+"/T_Fixed_Loc", 0.0);
    
-    this->set_parameter
-      (_T_Fixed,input,"Physics/"+PhysicsNaming::od_premixed_flame()+"/T_Fixed",0.0 );
-
-    this->set_parameter
-      (_Penalty_Tol,input,"Physics/"+PhysicsNaming::od_premixed_flame()+"/Penalty_Tol",1.0e-8 );
 
     this->read_input_options(input);
                                                                       
-    this->check_var_subdomain_consistency(_mass_flux_vars);
+    this->check_var_subdomain_consistency(_vel_vars);
     this->check_var_subdomain_consistency(_temp_vars);
     this->check_var_subdomain_consistency(_species_vars);
 
@@ -106,10 +100,10 @@ namespace GRINS
     context.get_element_fe(_species_vars.species(0))->get_dphi();
     context.get_element_fe(_species_vars.species(0))->get_xyz();
 
-    context.get_element_fe(_mass_flux_vars.var())->get_JxW();
-    context.get_element_fe(_mass_flux_vars.var())->get_phi();
-    context.get_element_fe(_mass_flux_vars.var())->get_dphi();
-    context.get_element_fe(_mass_flux_vars.var())->get_xyz();
+    context.get_element_fe(_vel_vars.u())->get_JxW();
+    context.get_element_fe(_vel_vars.u())->get_phi();
+    context.get_element_fe(_vel_vars.u())->get_dphi();
+    context.get_element_fe(_vel_vars.u())->get_xyz();
     
     context.get_element_fe(_temp_vars.T())->get_JxW();
     context.get_element_fe(_temp_vars.T())->get_phi();
@@ -119,10 +113,10 @@ namespace GRINS
 
     // We also need the side shape functions, etc.
 
-    context.get_side_fe(_mass_flux_vars.var())->get_JxW();
-    context.get_side_fe(_mass_flux_vars.var())->get_phi();
-    context.get_side_fe(_mass_flux_vars.var())->get_dphi();
-    context.get_side_fe(_mass_flux_vars.var())->get_xyz();
+    context.get_side_fe(_vel_vars.u())->get_JxW();
+    context.get_side_fe(_vel_vars.u())->get_phi();
+    context.get_side_fe(_vel_vars.u())->get_dphi();
+    context.get_side_fe(_vel_vars.u())->get_xyz();
 
     context.get_side_fe(this->_temp_vars.T())->get_JxW();
     context.get_side_fe(this->_temp_vars.T())->get_phi();
@@ -156,9 +150,9 @@ namespace GRINS
 	      {
 		this->_cp_index = postprocessing.register_quantity( name );
 	      }
-	    else if( name == (std::string("u")) )
+	    else if( name == (std::string("M_dot")) )
 	      {
-		this->_u_index = postprocessing.register_quantity( name );
+		this->_M_dot_index = postprocessing.register_quantity( name );
 	      }
 		
 	    //time for species specific values
@@ -240,7 +234,8 @@ namespace GRINS
     //Convenience
     const VariableIndex s0_var = this->_species_vars.species(0);
     
-    // The number of local degrees of freedom in each variable                                  //Variables are Species, Mass flux, and Temperature
+    // The number of local degrees of freedom in each variable                                
+    //Variables are Species, Velocity, and Temperature
     const unsigned int n_s_dofs = context.get_dof_indices(s0_var).size();
     const unsigned int n_T_dofs = context.get_dof_indices(this->_temp_vars.T()).size();
     
@@ -270,7 +265,10 @@ namespace GRINS
     unsigned int n_qpoints = context.get_element_qrule().n_points();
     for(unsigned int qp = 0;qp != n_qpoints;qp++)
       {
-	libMesh::Real T, M_dot;
+	if (this->_vel_vars.dim() >1)
+	  libmesh_not_implemented();
+
+	libMesh::Real T, u, M_dot;
 	libMesh::Gradient Grad_T;
 
 	libMesh::Real R, k, cp, rho, p0, mu;
@@ -279,7 +277,7 @@ namespace GRINS
 	T = context.interior_value(this->_temp_vars.T(),qp);
 	Grad_T = context.interior_gradient(this->_temp_vars.T(), qp);
 	
-	M_dot = context.interior_value(this->_mass_flux_vars.var(), qp);
+	u = context.interior_value(this->_vel_vars.u(), qp);
 	
 	p0 = this->get_p0();
 	
@@ -301,6 +299,8 @@ namespace GRINS
 	R = gas_evaluator.R_mix( mass_fractions );
 	
 	rho = this->rho( T, p0, R );
+	
+	M_dot = rho*u;
 	
 	cp = gas_evaluator.cp( T, p0, mass_fractions);
 	
@@ -437,37 +437,54 @@ namespace GRINS
       context.get_element_fe(this->_temp_vars.T())->get_JxW();
       
     // The Mass Flux shape functions at interior quadrature points.
-    const std::vector<std::vector<libMesh::Real> >& M_phi =
-      context.get_element_fe(this->_mass_flux_vars.var())->get_phi();
+    const std::vector<std::vector<libMesh::Real> >& u_phi =
+      context.get_element_fe(this->_vel_vars.u())->get_phi();
 
-    const unsigned int n_M_dofs =
-      context.get_dof_indices(this->_mass_flux_vars.var()).size();
+    const unsigned int n_u_dofs =
+      context.get_dof_indices(this->_vel_vars.u()).size();
       
-    libMesh::DenseSubVector<libMesh::Number> & Fm =
-      context.get_elem_residual(this->_mass_flux_vars.var()); // R_{M}
+    libMesh::DenseSubVector<libMesh::Number> & Fu =
+      context.get_elem_residual(this->_vel_vars.u()); // R_{M}
 
     unsigned int n_qpoints = context.get_element_qrule().n_points();
 
-    for(unsigned int qp=0; qp!=n_qpoints; qp++)
-      {
-	libMesh::Gradient dMdx = context.interior_gradient(this->_mass_flux_vars.var(), qp);
-	libMesh::Real jac = JxW[qp];
-	    
-	for(unsigned int i=0; i != n_M_dofs; i++)	    
-	  Fm(i) += dMdx(0)*M_phi[i][qp]*jac;
-      }
 
-    /*if( context.get_elem().contains_point(_T_Fixed_Loc) )
+ 
+    for (unsigned int qp = 0; qp != n_qpoints; ++qp)
       {
-	libMesh::Real T =  context.point_value(this->_temp_vars.T(),_T_Fixed_Loc);
-	for(unsigned int qp=0; qp!=n_qpoints; qp++)
+	libMesh::Gradient dudx = context.interior_gradient(this->_vel_vars.u(),qp);
+	libMesh::Real u = context.interior_value(this->_vel_vars.u(),qp);
+	
+	
+        libMesh::Real T = context.interior_value(this->_temp_vars.T(), qp);
+	libMesh::Gradient dTdx = context.interior_gradient(this->_temp_vars.T(),qp);
+
+	std::vector<libMesh::Real> mass_fractions(this->n_species());
+	std::vector<libMesh::Gradient> DYDx(this->n_species());
+
+        for(unsigned int s=0; s < this->_n_species; s++ )
 	  {
-	    libMesh::Real jac = JxW[qp];
-	    
-	    for(unsigned int i=0; i != n_M_dofs; i++)
-	      Fm(i) += 1/(this->_Penalty_Tol) * (T - this->_T_Fixed) * M_phi[i][qp]*jac;
+	    mass_fractions[s] = context.interior_value(this->_species_vars.species(s), qp);
+	    DYDx[s] = context.interior_gradient(this->_species_vars.species(s), qp);
 	  }
-	  }*/
+
+	Evaluator gas_evaluator(*(this-> _gas_mixture));
+	const libMesh::Real R_mix = gas_evaluator.R_mix(mass_fractions);
+        const libMesh::Real p0 = this->get_p0();
+        const libMesh::Real rho = this->rho(T, p0, R_mix);
+	const libMesh::Real M_mix = gas_evaluator.M_mix(mass_fractions);
+	libMesh::Real Chem_Term = 0;
+	libMesh::Real jac = JxW[qp];
+	for(unsigned int s=0; s < this->_n_species; s++)
+	  {
+	    Chem_Term += DYDx[s](0)/gas_evaluator.M(s);
+	  }
+	for(unsigned int i = 0; i!= n_u_dofs; i++)
+	  {
+	    Fu(i) +=((rho*dudx(0))-p0*u/(R_mix*T)*(M_mix*Chem_Term + dTdx(0)/T))*u_phi[i][qp]*jac;
+	  }
+
+      } // end Quadrature loop
 
   }   //end Element Constraint
 
@@ -522,9 +539,9 @@ namespace GRINS
 	
 	value = gas_evaluator.cp( T, p0, Y );
       }
-    else if ( quantity_index == this->_u_index )
+    else if ( quantity_index == this->_M_dot_index )
       {
-	libMesh::Real M_dot = this->M_dot(point,context);
+	libMesh::Real vel = context.point_value(_vel_vars.u(),point);
 
 	std::vector<libMesh::Real> Y( this->_n_species );
 	libMesh::Real T = this->T(point,context);
@@ -532,7 +549,7 @@ namespace GRINS
 	this->mass_fractions( point, context, Y );
 	libMesh::Real rho = this->rho(T,p0, gas_evaluator.R_mix(Y));
 
-	value = M_dot/rho;
+	value = rho*vel;
 	
       }
     //now onto the species dependent stuff
