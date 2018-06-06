@@ -334,8 +334,8 @@ namespace GRINS
 	    libMesh::DenseSubVector<libMesh::Number> &Fs =
 	      context.get_elem_residual(this->_species_vars.species(s)); //R_{s}
 	    
-	    const libMesh::Real term1 = -u*Grad_mass_fractions[s](0) + omega_dot[s]/rho;
-	    const libMesh::Real term2 = -D[s]*Grad_mass_fractions[s](0);
+	    const libMesh::Real term1 = -u*rho*Grad_mass_fractions[s](0) + omega_dot[s];
+	    const libMesh::Real term2 = -rho*D[s]*Grad_mass_fractions[s](0);
 	    
 	    for (unsigned int i =0;i != n_s_dofs;i++)
 	      {
@@ -406,7 +406,7 @@ namespace GRINS
 
 	    for (unsigned int i = 0; i != n_s_dofs; ++i)
 	      {
-		F_s(i) -= mass_fractions_dot*s_phi[i][qp]*jac;
+		F_s(i) -= rho*mass_fractions_dot*s_phi[i][qp]*jac;
 	      }
 	  }
 	
