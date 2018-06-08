@@ -41,10 +41,12 @@
 #include "grins/antioch_kinetics.h"
 #include "grins/materials_parsing.h"
 #include "grins/physics_naming.h"
+#include "grins/antioch_evaluator.h"
 
 #ifdef GRINS_HAVE_CANTERA
 #include "grins/cantera_mixture.h"
 #include "grins/cantera_kinetics.h"
+#include "grins/cantera_evaluator.h"
 
 libMesh::Real rhof(libMesh::Real P,libMesh::Real Rmix,libMesh::Real T) {
   libMesh::Real value = 0;
@@ -68,11 +70,11 @@ int main(int argc, char* argv[])
 
   const unsigned int n_species = antioch_mixture.n_species();
   
-  GRINS::AntiochKinetics<Antioch::CEACurveFit<libMesh::Real> > antioch_kinetics( antioch_mixture);
+  GRINS::AntiochEvaluator<Antioch::CEACurveFit<libMesh::Real> , Antioch::IdealGasMicroThermo<Antioch::NASAEvaluator<libMesh::Real, Antioch::CEACurveFit<libMesh::Real> >, libMesh::Real> > antioch_evaluator( antioch_mixture);
 
   //Cantera Mixture and kinetics Initialization ***************************************************************
   GRINS::CanteraMixture cantera_mixture(input, "Hydrogen");
-  GRINS::CanteraKinetics cantera_kinetics(cantera_mixture);
+  GRINS::CanteraEvaluator cantera_evaluator(cantera_mixture);
 
   if(n_species != cantera_mixture.n_species()) 
     {
@@ -88,31 +90,31 @@ int main(int argc, char* argv[])
   std::vector<libMesh::Real> Mass_Fractions(n_species);
    for( unsigned int s = 0; s < n_species; s++ )
     {
-      Mass_Fractions[s] = input( "Conditions/"+antioch_mixture.species_name(s), 0.00);
+      Mass_Fractions[s] = input( "Conditions/"+antioch_evaluator.species_name(s), 0.00);
     }
 
    libMesh::Real p0 = 100000; //pascals
 
    //Antioch Kinetic Parameters Calculations ******************************************************************
-   libMesh::Real R_mix_antioch = antioch_mixture.R_mix(Mass_Fractions);
-   libMesh::Real M_mix_antioch = antioch_mixture.M_mix(Mass_Fractions);
+   libMesh::Real R_mix_antioch = antioch_evaluator.R_mix(Mass_Fractions);
+   libMesh::Real M_mix_antioch = antioch_evaluator.M_mix(Mass_Fractions);
    std::vector<std::vector<libMesh::Real> > omega_dot_antioch(Temperature_Dist.size());
    for(unsigned int i=0;i<Temperature_Dist.size();i++)
      {
        omega_dot_antioch[i].resize(n_species);
        libMesh::Real rho = rhof(p0,R_mix_antioch,Temperature_Dist[i]);
-       antioch_kinetics.omega_dot(Temperature_Dist[i],rho,Mass_Fractions,omega_dot_antioch[i]);
+       antioch_evaluator.omega_dot(Temperature_Dist[i],rho,Mass_Fractions,omega_dot_antioch[i]);
      }
 
    //Cantera Kinetic Parameters Calculations *****************************************************************
-   libMesh::Real R_mix_cantera = cantera_mixture.R_mix(Mass_Fractions);
-   libMesh::Real M_mix_cantera = cantera_mixture.M_mix(Mass_Fractions);
+   libMesh::Real R_mix_cantera = cantera_evaluator.R_mix(Mass_Fractions);
+   libMesh::Real M_mix_cantera = cantera_evaluator.M_mix(Mass_Fractions);
    std::vector<std::vector<libMesh::Real> > omega_dot_cantera(Temperature_Dist.size());
    for(unsigned int i=0; i < Temperature_Dist.size();i++)
      {
-       omega_dot_cantera[i].resize(n_species);
+       omega_dot_cantera[i].resize(n_species,4);
        libMesh::Real rho = rhof(p0,R_mix_cantera,Temperature_Dist[i]);
-       cantera_kinetics.omega_dot(Temperature_Dist[i],rho,Mass_Fractions,omega_dot_cantera[i]);
+       cantera_evaluator.omega_dot(Temperature_Dist[i],rho,Mass_Fractions,omega_dot_cantera[i]); //returns 0 something is horribly wrong here
      }
    
    //Printing out What we want and saving data to our files
@@ -146,8 +148,24 @@ int main(int argc, char* argv[])
    output << "       |Cantera         |Antioch         |" << std::endl;
    output << "R_Mix  |" <<  std::setprecision(16) << R_mix_cantera <<"|" <<  std::setprecision(16) << R_mix_antioch << "|" << std::endl;
    output << "M_Mix  |" << std::setprecision(16) << M_mix_cantera << "|" << std::setprecision(16) << M_mix_antioch << "|" << std::endl;
+   //Testing to check individual species molecular weights
+   for(unsigned int s=0;s<n_species;s++)
+     output <<std::setprecision(7) << antioch_mixture.species_name(s) <<"|" << std::setprecision(16) << cantera_evaluator.M(s) << "|" << std::setprecision(16) << antioch_evaluator.M(s) << "|" << std::endl;
+
    output.close();
    
+   //Testing to check individual species molecular weights
+   
+
+
+
+
+
+
+
+
+
+
    return 0;
 }
 #endif //GRINS_HAVE_CANTERA
