@@ -49,24 +49,6 @@ namespace GRINS
        "Physics/"+PhysicsNaming::od_premixed_flame()+"/fixed_rho_value", 0.0 );
 
 
-    //Parsing the Unburnt Temperature
-    this->set_parameter(_Tu, input,
-	                "Physics/"+PhysicsNaming::od_premixed_flame()+"/Unburnt_Temperature", 0.0);
-    if(_Tu ==0)
-      {
-	std::cout << "Unburnt gas Temperature not set in the input!!" << std::endl;
-	libmesh_not_implemented();
-      }
-
-    //Initial Inflow Equivalence ratio
-    _Inflow_Species.resize(this->_n_species);
-    std::cout << std::endl;
-    for (unsigned int s = 0; s < this->_n_species; s++)
-	  {
-	    this->set_parameter(_Inflow_Species[s], input, "Physics/"+PhysicsNaming::od_premixed_flame()+"/"
-				+_gas_mixture->species_name(s), 0.0);
-            std::cout << "Y_" + _gas_mixture->species_name(s) + " = " <<  _Inflow_Species[s] << " \n";
-	  }
 
     this->read_input_options(input);
 
@@ -505,99 +487,6 @@ namespace GRINS
       }
 
   }   //end Element Constraint
-
-
-
-
-
-
-
-
-  template<typename Mixture, typename Evaluator>
-  void ODPremixedFlame<Mixture,Evaluator>::side_time_derivative( bool compute_jacobian, AssemblyContext & context)
-  {
-    if(compute_jacobian)
-      libmesh_not_implemented();
-
-    //Check if were on the right boundary,
-    //TODO:: make this specified in input file probably
-    if( context.has_side_boundary_id( 0 ))
-      {
-	const std::vector<libMesh::Real> &JxW =
-	  context.get_side_fe(this->_temp_vars.T())->get_JxW();
-
-	// The Mass Flux shape functions at interior quadrature points.
-	const std::vector<std::vector<libMesh::Real> >& M_phi =
-	  context.get_side_fe(this->_mass_flux_vars.var())->get_phi();
-
-	unsigned int n_qpoints = context.get_side_qrule().n_points();
-
-	const unsigned int n_M_dofs =
-	  context.get_dof_indices(this->_mass_flux_vars.var()).size();
-
-	//grabbing the element Mass Residual
-	libMesh::DenseSubVector<libMesh::Number> & Fm =
-	  context.get_elem_residual(this->_mass_flux_vars.var()); // R_{M}
-
-
-	for(unsigned int qp=0; qp!=n_qpoints; qp++)
-	  {
-	    libMesh::Real jac = JxW[qp];
-
-	    //Defining and grabbing all the variables we'll need
-	    libMesh::Real T, M_dot;
-	    libMesh::Gradient Grad_T;
-
-	    libMesh::Real R, k, cp, rho, p0, mu;
-	    Evaluator gas_evaluator( *(this->_gas_mixture) );
-
-	    T = context.side_value(this->_temp_vars.T(),qp);
-	    Grad_T = context.side_gradient(this->_temp_vars.T(), qp);
-
-	    M_dot = context.side_value(this->_mass_flux_vars.var(), qp);
-
-	    p0 = this->_p0;
-
-	    std::vector<libMesh::Real> mass_fractions, h_i, h_u, D;
-
-	    mass_fractions.resize(this->_n_species);
-	    h_i.resize(this->_n_species);
-	    h_u.resize(this->_n_species);
-
-
-
-	    for (unsigned int s = 0; s < this->_n_species; s++)
-	      {
-		mass_fractions[s] = std::max( context.side_value(this->_species_vars.species(s),qp),0.0);
-		h_i[s] = gas_evaluator.h_s( T, s );
-		h_u[s] = gas_evaluator.h_s( this->_Tu, s );
-	      }
-	    //proccess to calculate k
-	    R = gas_evaluator.R_mix( mass_fractions );
-	    rho = this->rho( T, p0, R );
-	    cp = gas_evaluator.cp( T, p0, mass_fractions);
-	    D.resize(this->_n_species);
-	    gas_evaluator.mu_and_k_and_D( T, rho, cp, mass_fractions,
-					  mu, k, D );
-
-	    //Solve our loop over species
-	    libMesh::Real Enth_Diff = 0;
-	    for(unsigned int s=0; s < this->n_species(); s++)
-	      {
-		Enth_Diff += _Inflow_Species[s]*(h_i[s]-h_u[s]);
-	      }
-
-	      for(unsigned int i=0; i != n_M_dofs; i++)
-	      {
-
-		Fm(i) += (M_dot*Enth_Diff - k*Grad_T(0))*M_phi[i][qp]*jac;
-		}
-
-	  }
-      }
-  }
-
-
 
 
 
