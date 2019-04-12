@@ -42,7 +42,8 @@ namespace GRINS
       _k_index(0),
       _cp_index(0),
       _u_index(0),
-      _mu_index(0)
+      _mu_index(0),
+      _mixture_fraction_index(0)
   {
     this->set_parameter
       (_fixed_rho_value, input,
@@ -154,13 +155,25 @@ namespace GRINS
 	      {
 		this->_u_index = postprocessing.register_quantity( name );
 	      }
-	     else if(name == std::string("mu") )
+            else if(name == std::string("mu") )
 	      {
-		this->_mu_index = postprocessing.register_quantity( name);
+		this->_mu_index = postprocessing.register_quantity( name );
 	      }
+            else if( name == std::string("mixture_fraction") )
+              {
+                this->_mixture_fraction_index = postprocessing.register_quantity( name );
+              }
+            else if( name == std::string("heat_conduction") )
+              {
+                this->_heat_transfer_index = postprocessing.register_quantity( name );
+              }
+            else if( name == std::string("energy_source") )
+              {
+                this->_energy_source_index = postprocessing.register_quantity( name );
+              }
 	    //time for species specific values
 
-	      else if(name == std::string("mole_fractions") )
+            else if(name == std::string("mole_fractions") )
 	      {
 		this ->_mole_fractions_index.resize(this->n_species());
 
@@ -219,7 +232,10 @@ namespace GRINS
 			  << "                              omega_dot" << std::endl
 			  << "                              u" << std::endl
 			  << "                              mu" << std::endl
-		          << "                              cp_s" << std::endl;
+		          << "                              cp_s" << std::endl
+                          << "                              mixture_fraction" << std::endl
+                          << "                              energy_source" << std::endl
+                          << "                              heat_conduction" << std::endl;
                 libmesh_error();
 	      }
 	  }
@@ -557,7 +573,6 @@ namespace GRINS
       }
     else if ( quantity_index == this->_mu_index )
       {
-
 	std::vector<libMesh::Real> Y( this->_n_species );
 
 	libMesh::Real T = this->T(point,context);
@@ -578,7 +593,79 @@ namespace GRINS
 	value = mu;
 	return;
       }
+    else if ( quantity_index == this->_mixture_fraction_index )
+      {
+        std::vector<libMesh::Real> Y( this->_n_species );
+        this->mass_fractions(point,context,Y );
+        unsigned int C_index = gas_evaluator.species_index("C");
+        unsigned int CH4_index = gas_evaluator.species_index("CH4");
+        libMesh::Real CH4_MW = gas_evaluator.M(CH4_index);
+        libMesh::Real C_MW = gas_evaluator.M(C_index);
+        for( unsigned int s =0;s < this->n_species(); s++ )
+          {
+            std::string species = gas_evaluator.species_name(s);
+            int H_Atoms = 0;
+            int C_Atoms = 0;
+            int number;
+            for(unsigned int i =0; i < species.size(); i++)
+              {
+                if ( species[i] == 'C')
+                  {
+                    if (isdigit(species[i+1]) )
+                      {
+                        number = species[i+1];
+                        C_Atoms += number;
+                      }
+                    else
+                      C_Atoms += 1;
+                  }
 
+              }
+            //Now we know if this species contains C or H atoms and how much,
+            //so we have to add them to the mixture fraction
+            value += Y[s]/gas_evaluator.M(s)*(C_Atoms*C_MW)*(CH4_MW/C_MW);
+
+          }
+
+
+        return;
+      }
+    else if ( quantity_index == this->_heat_transfer_index )
+      {
+	std::vector<libMesh::Real> Y(this->_n_species );
+	libMesh::Real T = this->T(point,context);
+	this->mass_fractions( point,context, Y);
+	libMesh::Real p0 = this->_p0;
+	libMesh::Real cp = gas_evaluator.cp( T, p0, Y );
+	libMesh::Real rho = this->rho(T, p0, gas_evaluator.R_mix(Y) );
+	std::vector<libMesh::Real> D(this->_n_species);
+	libMesh::Real mu,k;
+	gas_evaluator.mu_and_k_and_D( T, rho, cp, Y, mu, k, D );
+
+        libMesh::Gradient Grad_T=this->Grad_T(point,context);
+	value = -k*Grad_T(0);
+	return;
+      }
+    else if ( quantity_index == _energy_source_index )
+      {
+        std::vector<libMesh::Real> Y( this->n_species() );
+        this->mass_fractions( point, context, Y );
+
+        libMesh::Real T = this->T(point,context);
+
+        libMesh::Real p0 = this->_p0;
+
+        libMesh::Real rho = this->rho(T,p0, gas_evaluator.R_mix(Y) );
+
+        std::vector<libMesh::Real> omega_dot( this->n_species() );
+
+        gas_evaluator.omega_dot( T, rho, Y, omega_dot );
+        for( unsigned int s=0; s < this->n_species(); s++)
+          {
+            value  += omega_dot[s]*gas_evaluator.h_s( T, s );
+          }
+        return;
+      }
     //now onto the species dependent stuff
 
     else

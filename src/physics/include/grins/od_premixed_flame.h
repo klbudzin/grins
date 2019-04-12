@@ -29,6 +29,8 @@ namespace GRINS
     virtual void set_time_evolving_vars( libMesh::FEMSystem* system );
 
     libMesh::Real T( const libMesh::Point& p, const AssemblyContext& c ) const;
+
+    libMesh::Gradient Grad_T( const libMesh::Point& p, const AssemblyContext& c) const;
     libMesh::Real M_dot( const libMesh::Point& p, const AssemblyContext& c ) const;
 
     void mass_fractions( const libMesh::Point& p, const AssemblyContext& c,
@@ -94,6 +96,12 @@ namespace GRINS
     //!Index from registering this quantity
     unsigned int _mu_index;
 
+    unsigned int _energy_source_index;
+
+    unsigned int _heat_transfer_index;
+
+    unsigned int _mixture_fraction_index;
+
     libMesh::Number _p0;
 
     //! Index from registering this quantity. Each species will have it's own index.
@@ -130,6 +138,13 @@ namespace GRINS
     libMesh::Real ODPremixedFlame<Mixture,Evaluator>::T( const libMesh::Point& p,
 							 const AssemblyContext& c ) const
     { return c.point_value(_temp_vars.T(),p); }
+
+  template< typename Mixture, typename Evaluator>
+    inline
+    libMesh::Gradient ODPremixedFlame<Mixture,Evaluator>::Grad_T( const libMesh::Point& p,
+                                                              const AssemblyContext& c ) const
+    { return c.point_gradient(_temp_vars.T(),p); }
+
 
   template< typename Mixture, typename Evaluator>
     inline

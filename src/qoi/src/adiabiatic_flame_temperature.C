@@ -64,6 +64,9 @@ namespace GRINS
    unsigned int /*qoi_num*/ )
   {
     _temp_vars = &GRINSPrivate::VariableWarehouse::get_variable_subclass<PrimitiveTempFEVariables>(VariablesParsing::temp_variable_name(input,std::string("AdiabiaticFlameTemperature"),VariablesParsing::QOI));
+
+    this->set_parameter
+      ( _Temperature_Point, input,"QoI/AdiabiaticFlameTemperature" , 0.01 );
   }
 
 
@@ -90,7 +93,7 @@ namespace GRINS
       {
 
         libMesh::Number& qoi = context.get_qois()[qoi_index];
-        libMesh::Real T = context.point_value(this->_temp_vars->var(),0.01);
+        libMesh::Real T = context.point_value(this->_temp_vars->var(),this->_Temperature_Point);
         qoi += T;
       }
   }

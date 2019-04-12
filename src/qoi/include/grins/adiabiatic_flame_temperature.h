@@ -64,6 +64,7 @@ namespace GRINS
     libMesh::Real T( const libMesh::Point& p, const AssemblyContext& c ) const;
   protected:
     const PrimitiveTempFEVariables * _temp_vars;
+    libMesh::Real _Temperature_Point;
 
   private:
 
