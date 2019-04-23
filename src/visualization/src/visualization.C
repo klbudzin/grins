@@ -39,6 +39,7 @@
 #include "libmesh/tecplot_io.h"
 #include "libmesh/vtk_io.h"
 #include "libmesh/enum_xdr_mode.h"
+#include "libmesh/gnuplot_io.h"
 
 // POSIX
 #include <sys/errno.h>
@@ -207,6 +208,19 @@ namespace GRINS
             libMesh::VTKIO(mesh).write_equation_systems( filename,
                                                          *equation_system );
           }
+         else if ((*format) == "gnuplot")
+          {
+            if( mesh.mesh_dimension() != 1)
+              {
+                std::cerr << " Mesh Must be One Dimesnional to use"
+                          << " Gnu Plot format" << std::endl;
+                libmesh_error();
+              }
+            std::string filename = filename_prefix+".gpi";
+            libMesh::GnuPlotIO(mesh).write_equation_systems( filename,
+                                                             *equation_system );
+          }
+
         else if ((*format) == "ExodusII")
           {
             std::string filename = filename_prefix+".exo";
